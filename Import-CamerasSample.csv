@@ -1,0 +1,2 @@
+﻿Camera Name,Manufacturer,ProductType,User,Password,IP,Port,Area,Resolution,FrameRate,Live,Archiving,Remote,Low,High,BitRate,Stream
+Axisカメラ,Axis,Other,root,Zaq!2wsX,172.16.1.141,80,Area-02,640x480,5,ON,ON,ON,ON,ON,1024,H.265/HEVC - 1
