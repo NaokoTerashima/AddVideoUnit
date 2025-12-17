@@ -1,0 +1,505 @@
+async Task<LastInfo> AddEventToAction(Engine engine, List<string[]> csvData)
+{
+    LastInfo lastInfo = new LastInfo();
+    string myMethodName = "AddEventToAction";
+    string currentStep = "AddEventToActionStart";
+    string errorReason = "";
+    string NGline = string.Empty;
+    List<string> NGList = new List<string>();
+    for (int col = 0; col < 31; col++)
+    {
+        NGline += $"{csvData[0][col]},";
+    }
+    NGList.Add(NGline);
+
+    string iniPath = sdn.SYSCONFIG_PATH; //フルパス
+    string pathNow = sdn.DIRECTORY_CURRENT; //現在のディレクトリ
+
+    List<int> WaitList = Enumerable.Range(0, 10)
+            .Select(i => sdn.GetProfileInt("WAIT_09", $"{i:00}", 0, iniPath))
+            .ToList();
+
+    string waitMode = sdn.GetProfileStr("WAIT_09", "WaitMode", "1", iniPath);
+
+    CultureInfo jp = new CultureInfo("ja-JP");
+    CultureInfo us = new CultureInfo("en-US");
+
+    try
+    {
+        currentStep = "スケジュール「常時」取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultSchedule = await CreateQuery(engine, EntityType.Schedule);
+        var Schedules = resultSchedule.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<Schedule>();
+
+        //「常時」または「Always」を探す
+        //engine.ActionManager.BuildAction(actionType, recipientGuid, scheduleGuid)の引数がNULLになってしまう対策(11/17)
+        Guid scheduleGuid = Guid.Empty;
+        foreach (var item in Schedules)
+        {
+            if (item.Name == "常時" || item.Name == "Always")
+            {
+                scheduleGuid = item.Guid;
+                LogandTextBox(myMethodName, $"スケジュール「{item.Name}」Guid {scheduleGuid}", 0);
+                break;
+            }
+        }
+        if (scheduleGuid == Guid.Empty) throw new Exception("スケジュール「常時」NULL");
+
+        // 12/16変更　エンティティが0の場合、例外エラーが出ていたが、それをメッセージのみに変更した
+        currentStep = "マクロ取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultMacro = await CreateQuery(engine, EntityType.Macro);
+        var Macros = resultMacro.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<Macro>();
+        if (Macros == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (Macros.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        currentStep = "出力デバイス取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultDevice = await CreateQuery(engine, EntityType.Device);
+        var OutputDevices = resultDevice.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<OutputDevice>();
+        if (OutputDevices == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (OutputDevices.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        currentStep = "出力動作取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultOutputBehavior = await CreateQuery(engine, EntityType.OutputBehavior);
+        var OutputBehaviors = resultOutputBehavior.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<OutputBehavior>();
+        if (OutputBehaviors == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (OutputBehaviors.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        currentStep = "アラーム取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultAlarm = await CreateQuery(engine, EntityType.Alarm);
+        var Alarms = resultAlarm.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<Alarm>();
+        if (Alarms == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (Alarms.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        currentStep = "ゾーン取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultZone = await CreateQuery(engine, EntityType.Zone);
+        var Zones = resultZone.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<Genetec.Sdk.Entities.Zone>();
+        if (Zones == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (Zones.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        currentStep = "カメラ取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultCamera = await CreateQuery(engine, EntityType.Camera);
+        var Cameras = resultCamera.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<Camera>();
+        if (Cameras == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (Cameras.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        currentStep = "ユーザーグループ取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var resultUserGroup = await CreateQuery(engine, EntityType.UserGroup);
+        var UserGroups = resultUserGroup.Data.AsEnumerable().Select(row => engine.GetEntity(row.Field<Guid>(nameof(Guid)))).OfType<UserGroup>();
+        if (UserGroups == null) LogandTextBox(myMethodName, $"{currentStep} : 一覧がNULLでした。", 0);
+        if (UserGroups.Count() == 0) LogandTextBox(myMethodName, $"{currentStep} : 一覧のカウントが 0 でした。", 0);
+
+        //その中からCustomIconAlarmのみのList作成
+        currentStep = "カスタムアイコン取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        List<Alarm> CustomIcons = new List<Alarm>();
+        foreach (var item in Alarms)
+        {
+            if (item.Name.Contains(csvData[0][30]))
+                CustomIcons.Add(item);
+        }
+
+        //マクロのパラメータ列を取得
+        currentStep = "CSV1行目からマクロパラメータ取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var headerMap = new Dictionary<string, int>();
+        for (int i = 6; i < csvData[0].Count() - 1; i++)
+        {
+            headerMap[csvData[0][i]] = i;
+        }
+
+        currentStep = "システム構成からカスタムイベント取得";
+        LogandTextBox(myMethodName, currentStep, 0);
+        var config = (SystemConfiguration)engine.GetEntity(SystemConfiguration.SystemConfigurationGuid);
+        ICustomEventService customEventService = config.CustomEventService;
+        IReadOnlyList<CustomEvent> customEventsList = customEventService.CustomEvents;
+
+        int csvRow = 1;
+        int errorCount = 0;
+        ActionManager actionManager = engine.ActionManager;
+
+        while (csvRow < csvData.Count)
+        {
+            try
+            {
+                currentStep = "処理開始";
+                LogandTextBox(myMethodName, $"[{csvRow}]{currentStep}", 0);
+
+                SystemConfiguration configuration = (SystemConfiguration)engine.GetEntity(SystemConfiguration.SystemConfigurationGuid);
+                EventType eventType = EventType.None;
+                ActionType actionType = ActionType.None;
+                PtzCommandType ptzCommandType = PtzCommandType.InvalidCommand;
+                int customEventId = 0;
+                bool paramPtz = false;
+                Guid recipientGuid = Guid.Empty;
+                Genetec.Sdk.Actions.Action action = null;
+                //ActionManager actionManager = engine.ActionManager;
+
+                currentStep = "イベントタイプ検索";
+                string eventTypeStr = csvData[csvRow][0];
+
+                switch (eventTypeStr)
+                {
+                    case "アラーム起動":
+                        eventType = EventType.AlarmTriggered;
+                        LogandTextBox(myMethodName, $"EventType {eventType.GetName(jp)}", 0);
+                        break;
+                    case "アラーム承認":
+                        eventType = EventType.AlarmAcknowledged;
+                        LogandTextBox(myMethodName, $"EventType {eventType.GetName(jp)}", 0);
+                        break;
+                    case "警報発生":
+                        eventType = EventType.CustomEvent;
+                        foreach (var item in customEventsList)
+                        {
+                            if (item.Name == eventTypeStr)
+                            {
+                                customEventId = item.Id;
+                                LogandTextBox(myMethodName, $"CustomEventType {item.Name}, CustomEventId {customEventId}", 0);
+                            }
+                        }
+                        break;
+                }
+
+                if (eventType == EventType.None) throw new Exception("イベントの検索に失敗しました。");
+
+                currentStep = "Action ActionType・エンティティ検索";
+                string actionTypeStr = csvData[csvRow][1];
+                string recipientStr = csvData[csvRow][2];
+                switch (actionTypeStr)
+                {
+                    case "アラームモードオフゾーン":
+                        actionType = ActionType.DisarmZone;
+                        LogandTextBox(myMethodName, "actionType = ActionType.DisarmZone", 0);
+                        foreach (var item in Zones)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Zone {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "アラームモードオンゾーン":
+                        actionType = ActionType.ArmZone;
+                        LogandTextBox(myMethodName, "actionType = ActionType.ArmZone", 0);
+                        foreach (var item in Zones)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Zone {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+                    case "アラーム起動":
+                        actionType = ActionType.TriggerAlarm;
+                        LogandTextBox(myMethodName, "actionType = ActionType.TriggerAlarm", 0);
+                        foreach (var item in Alarms)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Alarm {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "パターンを実行":
+                        ptzCommandType = PtzCommandType.StartPattern;
+                        LogandTextBox(myMethodName, "ptzCommandType = PtzCommandType.StartPattern", 0);
+                        paramPtz = true;
+                        foreach (var item in Cameras)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Camera {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "プリセットへ移動":
+                        ptzCommandType = PtzCommandType.GoToPreset;
+                        LogandTextBox(myMethodName, "ptzCommandType = PtzCommandType.GoToPreset", 0);
+                        paramPtz = true;
+                        foreach (var item in Cameras)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Camera {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "ホームポジションに移動":
+                        ptzCommandType = PtzCommandType.Home;
+                        LogandTextBox(myMethodName, "ptzCommandType = PtzCommandType.Home", 0);
+                        paramPtz = true;
+                        foreach (var item in Cameras)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Camera {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "ブックマーク追加":
+                        actionType = ActionType.AddBookmark;
+                        LogandTextBox(myMethodName, "actionType = ActionType.AddBookmark", 0);
+                        foreach (var item in Cameras)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Camera {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "マクロ実行":
+                        actionType = ActionType.RunMacro;
+                        LogandTextBox(myMethodName, "actionType = ActionType.RunMacro", 0);
+                        foreach (var item in Macros)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Macro {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "記録開始":
+                        actionType = ActionType.StartRecording;
+                        LogandTextBox(myMethodName, "actionType = ActionType.StartRecording", 0);
+                        foreach (var item in Cameras)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Camera {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "記録停止":
+                        actionType = ActionType.StopRecording;
+                        LogandTextBox(myMethodName, "actionType = ActionType.StopRecording", 0);
+                        foreach (var item in Cameras)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"Camera {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+
+                    case "出力動作実行":
+                        actionType = ActionType.TriggerOutput;
+                        LogandTextBox(myMethodName, "actionType = ActionType.TriggerOutput", 0);
+                        foreach (var item in OutputDevices)
+                        {
+                            if (item.Name == recipientStr)
+                            {
+                                recipientGuid = item.Guid;
+                                LogandTextBox(myMethodName, $"OutputDevice {item.Name}", 0);
+                                break;
+                            }
+                        }
+                        break;
+                }
+
+                
+                if (WaitList[1] != 0)
+                {
+                    if (waitMode == "1") Thread.Sleep(WaitList[1]);
+                    else await Task.Delay(WaitList[1]);
+                }
+
+                currentStep = "actionType NULLチェック";
+                if (paramPtz == true)
+                {
+                    if (ptzCommandType == PtzCommandType.InvalidCommand)
+                        throw new Exception("PtzCommandType設定不可。初期値[PtzCommandType.InvalidCommand]のままです。");
+                }
+                else
+                {
+                    if (actionType == ActionType.None)
+                        throw new Exception("ActionType設定不可。初期値[ActionType.None]のままです。");
+                }
+
+                currentStep = "recipientGuid NULLチェック";
+                if (recipientGuid == Guid.Empty) throw new Exception("RecipientGuid 設定不可");
+
+                LogandTextBox(myMethodName, $"actionType {actionType}", 0);
+                LogandTextBox(myMethodName, $"recipientGuid {recipientGuid}", 0);
+                LogandTextBox(myMethodName, $"scheduleGuid {scheduleGuid}", 0);
+                LogandTextBox(myMethodName, $"paramPtz {paramPtz}", 0);
+
+
+                currentStep = "engine.ActionManager.BuildAction";
+                if (paramPtz == true)
+                    action = actionManager.BuildAction(ptzCommandType, recipientGuid, scheduleGuid);
+                else
+                    action = actionManager.BuildAction(actionType, recipientGuid, scheduleGuid);
+
+                //action = engine.ActionManager.BuildAction(ptzCommandType, recipientGuid, scheduleGuid);
+                //action = engine.ActionManager.BuildAction(actionType, recipientGuid, scheduleGuid);
+
+
+                currentStep = "action パラメータ追加";
+                if (action is PatternAction patternAction)
+                    patternAction.PatternId = int.Parse(csvData[csvRow][4]);
+                else if (action is PresetAction presetAction)
+                    presetAction.PresetId = int.Parse(csvData[csvRow][4]);
+                else if (action is AddBookmarkAction bookmarkAction)
+                    bookmarkAction.Message = csvData[csvRow][4];
+                else if (action is StartRecordingAction startRecordingAction)
+                {
+                    if (csvData[csvRow][4] == "初期値" || csvData[csvRow][4] == "Default")
+                        startRecordingAction.RecordingLength = TimeSpan.Zero;
+                    else if (csvData[csvRow][4] == "期限なし" || csvData[csvRow][4] == "Infinite")
+                        startRecordingAction.RecordingLength = TimeSpan.MaxValue;
+                    else if (csvData[csvRow][4] == "特定" || csvData[csvRow][4] == "Specific")
+                        startRecordingAction.RecordingLength = TimeSpan.FromSeconds(double.Parse(csvData[csvRow][5]));
+                }
+                else if (action is StopRecordingAction stopRecordingAction)
+                {
+                    if (csvData[csvRow][4] == "今" || csvData[csvRow][4] == "Now")
+                        stopRecordingAction.RecordingLengthBeforeStop = TimeSpan.Zero;
+                    else if (csvData[csvRow][4] == "特定" || csvData[csvRow][4] == "Specific")
+                        stopRecordingAction.RecordingLengthBeforeStop = TimeSpan.FromSeconds(double.Parse(csvData[csvRow][5]));
+                }
+                else if (action is TriggerOutputAction triggerOutputAction)
+                {
+                    foreach (var item in OutputBehaviors)
+                    {
+                        if (item.Name == csvData[csvRow][4])
+                            triggerOutputAction.OutputBehavior = item.Guid;
+                    }
+                }
+                else if (action is ExecuteMacroAction macroAction)
+                {
+                    for (int col = 6; col < csvData.Count() - 1; col++)
+                    {
+                        string paramName = csvData[0][col];
+                        string cellValue = csvData[csvRow][col];
+                        Type paramType = null;
+                        object paramValue = null;
+
+                        if (paramName == "IP" || paramName == "Community" || paramName == "Oid")
+                        {
+                            paramType = typeof(string);
+                            paramValue = cellValue;
+                        }
+                        else if (paramName == "Port" || paramName == "ActiveValue")
+                        {
+                            paramType = typeof(int);
+                            if (int.TryParse(cellValue, out int intValue))
+                                paramValue = intValue;
+                        }
+                        else if (paramName == "Icon1_LightsOff" || paramName == "Icon2_LightsOn" || paramName == "Icon3_Emergency" || paramName == "Icon1_Active" || paramName == "Icon2_Normal" || paramName == "Icon3_Error")
+                        {
+                            paramType = typeof(Guid);
+                            foreach (Alarm IconAlarm in CustomIcons)
+                            {
+                                if (IconAlarm.Name == cellValue)
+                                {
+                                    paramValue = IconAlarm.Guid;
+                                    break;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            paramType = typeof(Guid);
+                            foreach (Alarm alarm in Alarms)
+                            {
+                                if (WaitList[1] != 0)
+                                {
+                                    if (waitMode == "1") Thread.Sleep(WaitList[1]);
+                                    else await Task.Delay(WaitList[1]);
+                                }
+
+                                if (alarm.Name == cellValue)
+                                {
+                                    paramValue = alarm.Guid;
+                                    break;
+                                }
+                            }
+                        }
+
+                        var newParam = new MacroExecutionParameter
+                        {
+                            PropertyName = paramName,
+                            PropertyType = paramType,
+                            PropertyValue = paramValue
+                        };
+                        macroAction.AddExecutionParameter(newParam);
+
+                        if (WaitList[2] != 0)
+                        {
+                            if (waitMode == "1") Thread.Sleep(WaitList[2]);
+                            else await Task.Delay(WaitList[2]);
+                        }
+                    }
+                }
+                if (eventType == EventType.CustomEvent) configuration.EventToActions.Add(eventType, action, customEventId);
+                else configuration.EventToActions.Add(eventType, action);
+            }
+            catch (Exception ex)
+            {
+                if (ex.Message.Contains("ActionType 設定不可") || ex.Message.Contains("PtzCommandType 設定不可")) errorReason = "アクション設定不可";
+                else if (ex.Message.Contains("RecipientGuid 設定不可")) errorReason = "アクションのエンティティ設定不可";
+
+                NGline = string.Empty;
+                for (int col = 0; col < 30; col++)
+                {
+                    NGline += $"{csvData[csvRow][col]},";
+                }
+                NGline += $"{errorReason}";
+                NGList.Add(NGline);
+
+                LogandTextBox(myMethodName, $"ERROR ■ currentStep : {currentStep} , ex.Message : {ex.Message} , ex.StackTrace : {ex.StackTrace}", 1);
+                errorCount++;
+            }
+            csvRow++;
+            if (WaitList[3] != 0)
+            {
+                if (waitMode == "1") Thread.Sleep(WaitList[3]);
+                else await Task.Delay(WaitList[3]);
+            }
+        }
+        lastInfo.AllCount = csvData.Count - 1;
+        lastInfo.ErrorCount = errorCount;
+        lastInfo.LastMsg = "";
+        lastInfo.NGList = NGList;
+    }
+    catch (Exception ex)
+    {
+        LogandTextBox(myMethodName, $"ERROR ■ currentStep : {currentStep} , ex.Message : {ex.Message} , ex.StackTrace : {ex.StackTrace}", 1);
+    }
+    return lastInfo;
+}
